@@ -1,8 +1,8 @@
 # tool macros
-CXX := g++
-CXXFLAGS :=
-DBGFLAGS := -g
-CCOBJFLAGS := $(CXXFLAGS) -c
+CXX ?= g++
+CXXFLAGS ?=
+DBGFLAGS ?= -g
+CCOBJFLAGS ?= $(CXXFLAGS) -c
 
 # path macros
 BIN_PATH := bin
@@ -13,39 +13,32 @@ DBG_PATH := debug
 # compile macros
 TARGET_NAME := main
 ifeq ($(OS),Windows_NT)
-	TARGET_NAME := $(addsuffix .exe,$(TARGET_NAME))
+    TARGET_NAME := $(addsuffix .exe,$(TARGET_NAME))
 endif
 TARGET := $(BIN_PATH)/$(TARGET_NAME)
 TARGET_DEBUG := $(DBG_PATH)/$(TARGET_NAME)
 
+# project name (fallback if not defined)
+project_name ?= my_project
+
 # src files & obj files
-SRC := $(foreach x, $(SRC_PATH), $(wildcard $(addprefix $(x)/*,.c*)))
-OBJ := $(addprefix $(OBJ_PATH)/, $(addsuffix .o, $(notdir $(basename $(SRC)))))
-OBJ_DEBUG := $(addprefix $(DBG_PATH)/, $(addsuffix .o, $(notdir $(basename $(SRC)))))
+SRC := $(shell find $(SRC_PATH) -type f -name "*.c*")
+OBJ := $(patsubst $(SRC_PATH)/%, $(OBJ_PATH)/%, $(SRC:.c=.o))
+OBJ_DEBUG := $(patsubst $(SRC_PATH)/%, $(DBG_PATH)/%, $(SRC:.c=.o))
 
 # clean files list
-DISTCLEAN_LIST := $(OBJ) \
-                  $(OBJ_DEBUG)
-CLEAN_LIST := $(TARGET) \
-			  $(TARGET_DEBUG) \
-			  $(DISTCLEAN_LIST)
+DISTCLEAN_LIST := $(OBJ) $(OBJ_DEBUG)
+CLEAN_LIST := $(TARGET) $(TARGET_DEBUG) $(DISTCLEAN_LIST)
 
 # default rule
 default: makedir all
 
-builder-build :
+builder-build:
 	docker build -f builder.Dockerfile -t $(project_name)-builder:latest .
 
-builder-run :
-	docker run \
-		--rm \
-		-it \
-		--platform linux/amd64 \
-		--workdir /builder/mnt \
-		-v ${PWD}:/builder/mnt \
-		$(project_name)-builder:latest \
-		/bin/bash
-
+builder-run:
+	docker run --rm -it --platform linux/amd64 --workdir /builder/mnt \
+		-v ${PWD}:/builder/mnt $(project_name)-builder:latest /bin/bash
 
 # non-phony targets
 $(TARGET): $(OBJ)
@@ -58,7 +51,7 @@ $(DBG_PATH)/%.o: $(SRC_PATH)/%.c*
 	$(CXX) $(CCOBJFLAGS) $(DBGFLAGS) -o $@ $<
 
 $(TARGET_DEBUG): $(OBJ_DEBUG)
-	$(CXX) $(CXXFLAGS) $(DBGFLAGS) $(OBJ_DEBUG) -o $@
+	$(CXX) $(CXXFLAGS) $(DBGFLAGS) -o $@ $(OBJ_DEBUG)
 
 # phony rules
 .PHONY: makedir
@@ -78,5 +71,5 @@ clean:
 
 .PHONY: distclean
 distclean:
-	@echo CLEAN $(CLEAN_LIST)
+	@echo CLEAN $(DISTCLEAN_LIST)
 	@rm -f $(DISTCLEAN_LIST)
